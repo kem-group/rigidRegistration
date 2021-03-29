@@ -17,6 +17,8 @@ from . import save
 from . import FFTW
 from .utils import generateShiftedImage, gauss2d, fit_gaussian, on_edge, get_cutout, fit_peaks, getpaths, allpaths
 
+
+
 class imstack(object):
     """
     Object for functions on stacks of images.
@@ -24,6 +26,8 @@ class imstack(object):
     """
 
     def __init__(self, image_stack):
+
+        print('working3')
         """
         Initializes imstack object from a 3D numpy array.
 
@@ -148,7 +152,7 @@ class imstack(object):
         self.mask_fourierspace = np.fft.fftshift(mask)
         return
 
-    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=True):
+    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=True, clippingDimension=None):
         """
         Gets all image shifts.
         Proceeds as follows:
@@ -213,7 +217,33 @@ class imstack(object):
             for j in range(i+1, self.nz):
                 if verbose:
                     print("Correlating images {} and {}".format(i,j))
+                    #pct = i+
                 cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+                
+                if not clippingDimension is None:
+                    cc_masked = np.fft.fftshift(cc)
+                    
+                    boundary_dim = np.abs(i-j)*clippingDimension
+                    
+                    cx = int(np.floor(cc.shape[0]/2))
+                    cy = int(np.floor(cc.shape[0]/2))
+                    
+                    x0 = cx-boundary_dim
+                    xf = cx+boundary_dim
+                    y0 = cy-boundary_dim
+                    yf = cy+boundary_dim
+                    
+                    if x0 >0:
+                        cc_masked[:x0,:] = 0 #left boundary
+                    if xf < cc.shape[0]:
+                        cc_masked[xf:,:] = 0 #right boundary
+                    if y0 > 0:
+                        cc_masked[:,:y0] = 0 #up boundary
+                    if yf < cc.shape[1]:
+                        cc_masked[:,yf:] = 0 #bottom boundary  
+                    cc = np.fft.fftshift(cc_masked)
+                
+                
                 xshift, yshift = findMaxima(cc)
                 if xshift<self.nx/2:
                         self.X_ij[i,j] = xshift
@@ -240,6 +270,9 @@ class imstack(object):
         Applies self.mask_fourierspace.  If undefined, masks using bandpass filter with n=4.
         (See self.makeFourierMask for more info.)
         """
+        
+        
+        
         try:
             cross_correlation = np.abs(self.fftw.ifft(self.mask_fourierspace * fft2 * np.conj(fft1)))
         except AttributeError:
