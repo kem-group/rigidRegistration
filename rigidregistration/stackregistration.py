@@ -27,7 +27,7 @@ class imstack(object):
 
     def __init__(self, image_stack):
 
-        print('working3')
+        print('working4')
         """
         Initializes imstack object from a 3D numpy array.
 
@@ -351,6 +351,38 @@ class imstack(object):
 
         shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
         return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
+
+    def checkGaussianFit(self,i,j):
+        cc = self.getSingleCrossCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+
+        all_shifts = self.get_n_cross_correlation_maxima(cc,self.num_peaks)
+
+        data = np.fft.fftshift(cc)
+        est_positions = all_shifts
+        est_sigmas = np.ones_like(all_shifts)*self.sigma_guess
+        est_params=[est_positions,est_sigmas]
+
+        #amplitudes, positions, sigmas, thetas, offsets, success_mask = fit_peaks(data,est_params,self.window_radius,print_mod=1, verbose=False)
+        datas = []
+        fits = []
+        popts = []
+        for i in range(len(est_params[0])):
+            x0,y0,sigma_x,sigma_y = est_params[0][i,0],est_params[0][i,1],est_params[1][i,0],est_params[1][i,1]
+            if not on_edge(data,x0,y0,self.window_radius):
+                cutout = get_cutout(data,x0,y0,self.window_radius)
+                popt, pcov, fit_success = fit_gaussian(self.window_radius,self.window_radius,sigma_x,sigma_y,0,0,cutout,plot=False,verbose=True)
+                datas.append(cutout)
+                xy_meshgrid = np.meshgrid(range(np.shape(cutout)[0]),range(np.shape(cutout)[1]))
+                fits.append(np.reshape(gauss2d(xy_meshgrid,*popt),cutout.shape))
+                popts.append(popt)
+                #print(popt)
+
+        return (np.array(datas),np.array(fits),np.array(popts),cc,all_shifts)
+
+        #shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
+        #return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
+        #return amplitudes, positions, sigmas, thetas, offsets, success_mask
+
 
     def setCoMParams(self,num_iter=2,min_window_frac=3):
         self.num_iter=num_iter
