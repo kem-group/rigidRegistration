@@ -348,7 +348,7 @@ class imstack(object):
         est_params=[est_positions,est_sigmas]
 
         amplitudes, positions, sigmas, thetas, offsets, success_mask = fit_peaks(data,est_params,self.window_radius,print_mod=1, verbose=False)
-
+        #for integrated intensity, switch to shift_x, shift_y = positions[np.argmax(2*np.pi*amplitudes*sigmas[:,0]*sigmas[:,1]+offsets*np.pi**sigmas[:,0]*sigmas[:,1])]
         shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
         return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
 
