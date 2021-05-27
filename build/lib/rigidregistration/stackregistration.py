@@ -17,6 +17,8 @@ from . import save
 from . import FFTW
 from .utils import generateShiftedImage, gauss2d, fit_gaussian, on_edge, get_cutout, fit_peaks, getpaths, allpaths
 
+
+
 class imstack(object):
     """
     Object for functions on stacks of images.
@@ -24,6 +26,8 @@ class imstack(object):
     """
 
     def __init__(self, image_stack):
+
+        print('working4')
         """
         Initializes imstack object from a 3D numpy array.
 
@@ -148,7 +152,7 @@ class imstack(object):
         self.mask_fourierspace = np.fft.fftshift(mask)
         return
 
-    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=True):
+    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=True, clippingDimension=None):
         """
         Gets all image shifts.
         Proceeds as follows:
@@ -213,7 +217,33 @@ class imstack(object):
             for j in range(i+1, self.nz):
                 if verbose:
                     print("Correlating images {} and {}".format(i,j))
+                    #pct = i+
                 cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+                
+                if not clippingDimension is None:
+                    cc_masked = np.fft.fftshift(cc)
+                    
+                    boundary_dim = np.abs(i-j)*clippingDimension
+                    
+                    cx = int(np.floor(cc.shape[0]/2))
+                    cy = int(np.floor(cc.shape[0]/2))
+                    
+                    x0 = cx-boundary_dim
+                    xf = cx+boundary_dim
+                    y0 = cy-boundary_dim
+                    yf = cy+boundary_dim
+                    
+                    if x0 >0:
+                        cc_masked[:x0,:] = 0 #left boundary
+                    if xf < cc.shape[0]:
+                        cc_masked[xf:,:] = 0 #right boundary
+                    if y0 > 0:
+                        cc_masked[:,:y0] = 0 #up boundary
+                    if yf < cc.shape[1]:
+                        cc_masked[:,yf:] = 0 #bottom boundary  
+                    cc = np.fft.fftshift(cc_masked)
+                
+                
                 xshift, yshift = findMaxima(cc)
                 if xshift<self.nx/2:
                         self.X_ij[i,j] = xshift
@@ -240,6 +270,9 @@ class imstack(object):
         Applies self.mask_fourierspace.  If undefined, masks using bandpass filter with n=4.
         (See self.makeFourierMask for more info.)
         """
+        
+        
+        
         try:
             cross_correlation = np.abs(self.fftw.ifft(self.mask_fourierspace * fft2 * np.conj(fft1)))
         except AttributeError:
@@ -315,9 +348,41 @@ class imstack(object):
         est_params=[est_positions,est_sigmas]
 
         amplitudes, positions, sigmas, thetas, offsets, success_mask = fit_peaks(data,est_params,self.window_radius,print_mod=1, verbose=False)
-
+        #for integrated intensity, switch to shift_x, shift_y = positions[np.argmax(2*np.pi*amplitudes*sigmas[:,0]*sigmas[:,1]+offsets*np.pi**sigmas[:,0]*sigmas[:,1])]
         shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
         return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
+
+    def checkGaussianFit(self,i,j):
+        cc = self.getSingleCrossCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+
+        all_shifts = self.get_n_cross_correlation_maxima(cc,self.num_peaks)
+
+        data = np.fft.fftshift(cc)
+        est_positions = all_shifts
+        est_sigmas = np.ones_like(all_shifts)*self.sigma_guess
+        est_params=[est_positions,est_sigmas]
+
+        #amplitudes, positions, sigmas, thetas, offsets, success_mask = fit_peaks(data,est_params,self.window_radius,print_mod=1, verbose=False)
+        datas = []
+        fits = []
+        popts = []
+        for i in range(len(est_params[0])):
+            x0,y0,sigma_x,sigma_y = est_params[0][i,0],est_params[0][i,1],est_params[1][i,0],est_params[1][i,1]
+            if not on_edge(data,x0,y0,self.window_radius):
+                cutout = get_cutout(data,x0,y0,self.window_radius)
+                popt, pcov, fit_success = fit_gaussian(self.window_radius,self.window_radius,sigma_x,sigma_y,0,0,cutout,plot=False,verbose=True)
+                datas.append(cutout)
+                xy_meshgrid = np.meshgrid(range(np.shape(cutout)[0]),range(np.shape(cutout)[1]))
+                fits.append(np.reshape(gauss2d(xy_meshgrid,*popt),cutout.shape))
+                popts.append(popt)
+                #print(popt)
+
+        return (np.array(datas),np.array(fits),np.array(popts),cc,all_shifts)
+
+        #shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
+        #return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
+        #return amplitudes, positions, sigmas, thetas, offsets, success_mask
+
 
     def setCoMParams(self,num_iter=2,min_window_frac=3):
         self.num_iter=num_iter

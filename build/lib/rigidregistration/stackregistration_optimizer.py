@@ -556,11 +556,9 @@ class imstack(object):
                 for p in paths:
                     pdx = np.array([tX_ij[ip] for ip in p])
                     pdy = np.array([tY_ij[ip] for ip in p])
-                    transitivity_scores[i,j] +=np.sqrt((pdx.sum()-tX_ij[j,i])**2+(pdy.sum()-tY_ij[j,i])**2)
+                    transitivity_scores[i,j] += np.sqrt((pdx.sum()-tX_ij[j,i])**2+(pdy.sum()-tY_ij[j,i])**2)
         transitivity_scores /= maxpaths
         return transitivity_scores
-
-
 
 
     def get_outliers(self, threshold, maxpaths=5):
