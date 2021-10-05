@@ -3,5 +3,5 @@ from . import display
 from . import save
 from . import FFTW
 from . import stackregistration
-from . import stackregistration_optimizer
 
+__version__="0.2.1"

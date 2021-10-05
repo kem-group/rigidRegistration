@@ -5,7 +5,7 @@ Save functions for stackregistration.py
 from __future__ import print_function, division, absolute_import
 import numpy as np
 import matplotlib.pyplot as plt
-from os.path import splitext
+from os.path import splitext, isfile
 from matplotlib.patches import Rectangle
 from matplotlib.backends.backend_pdf import PdfPages
 import tifffile
@@ -41,12 +41,38 @@ def save(imstack, fout, crop=True):
         metadata['gaussian_sigma_guess']=imstack.sigma_guess
         metadata['gaussian_window_radius']=imstack.window_radius
     metadata['fourier_mask_parameters']=imstack.mask_params
+    metadata['is_copy'] = imstack.is_copy
     metadata = json.dumps([metadata])
     if crop:
         tifffile.imsave(filepath,imstack.cropped_image.astype('float32'),description=metadata)
     else:
         tifffile.imsave(filepath,imstack.average_image.astype('float32'),description=metadata)
     return
+
+
+def save_registered_stack(imstack,fout,crop=True):
+    """
+    Saves imstack.registered_stack as bigtiff, appending to fout using tifffile
+    Inputs:
+        fout    str     path to output filename.
+                        Appends to existing file if present
+    """
+
+    if splitext(fout)[1]=='.tif':
+        filepath=fout
+    else:
+        filepath=fout+'.tif'
+    if isfile(filepath):
+        raise IOError('File already exists') 
+    with tifffile.TiffWriter(filepath, bigtiff=False, append=True) as tif:
+        for img_slice in range(0,np.size(imstack.stack_registered,2)):
+            if crop:
+                tif.save(np.float32(imstack.stack_registered[imstack.xmin:imstack.xmax,imstack.ymin:imstack.ymax,img_slice])) 
+            else:
+                tif.save(np.float32(imstack.stack_registered[:,:,img_slice]))
+
+    return
+
 
 def save_report(imstack, fout):
 

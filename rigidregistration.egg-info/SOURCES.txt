@@ -5,7 +5,6 @@ rigidregistration/__init__.py
 rigidregistration/display.py
 rigidregistration/save.py
 rigidregistration/stackregistration.py
-rigidregistration/stackregistration_optimizer.py
 rigidregistration/utils.py
 rigidregistration.egg-info/PKG-INFO
 rigidregistration.egg-info/SOURCES.txt

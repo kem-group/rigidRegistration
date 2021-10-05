@@ -10,6 +10,7 @@ See, e.g., stackregistration_sample_notebook.ipynb.
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from math import floor, ceil
+from tqdm.auto import tqdm
 
 # Import local libraries
 from . import display
@@ -27,7 +28,6 @@ class imstack(object):
 
     def __init__(self, image_stack):
 
-        print('working4')
         """
         Initializes imstack object from a 3D numpy array.
 
@@ -38,6 +38,8 @@ class imstack(object):
         self.imstack = image_stack
         self.nx, self.ny, self.nz = np.shape(image_stack)
         self.nz_min, self.nz_max = 0, self.nz
+
+        self.is_copy = False
 
         # Define real and reciprocal space meshgrids
         rx,ry = np.meshgrid(np.arange(self.nx),np.arange(self.ny))
@@ -51,6 +53,7 @@ class imstack(object):
         self.nz_mask = np.ones((self.nz,self.nz),dtype=bool)
         self.bad_image_mask = np.ones((self.nz,self.nz),dtype=bool)
         self.outlier_mask = np.ones((self.nz,self.nz),dtype=bool)
+        self.offdiagonal_mask = np.ones((self.nz,self.nz),dtype=bool)
         self.Rij_mask = np.ones((self.nz,self.nz),dtype=bool)
 
         # Include fftw library, if available
@@ -152,7 +155,7 @@ class imstack(object):
         self.mask_fourierspace = np.fft.fftshift(mask)
         return
 
-    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=True, clippingDimension=None):
+    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=False, clippingDimension=None):
         """
         Gets all image shifts.
         Proceeds as follows:
@@ -178,7 +181,7 @@ class imstack(object):
                                         'com' = center of mass. Finds center of mass twice, once
                                                 over whole image, and again over small region
                                                 about center from first iteration.
-            verbose             bool    If True prints images being correlated.
+            verbose             bool    Depracated
         Outputs:
             X_ij, Y_ij    ndarrays of floats, shape (nz,nz), of calculated shifts in X and Y.
         """
@@ -213,46 +216,45 @@ class imstack(object):
             return
 
         # Calculate all image shifts
-        for i in range (0, self.nz-1):
-            for j in range(i+1, self.nz):
-                if verbose:
-                    print("Correlating images {} and {}".format(i,j))
-                    #pct = i+
-                cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
-                
-                if not clippingDimension is None:
-                    cc_masked = np.fft.fftshift(cc)
+        with tqdm(total=int(self.nz*(self.nz-1)/2)) as pbar:
+            for i in (range (0, self.nz-1)):
+                for j in (range(i+1, self.nz)):
+                    cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
                     
-                    boundary_dim = np.abs(i-j)*clippingDimension
+                    if not clippingDimension is None:
+                        cc_masked = np.fft.fftshift(cc)
+                        
+                        boundary_dim = np.abs(i-j)*clippingDimension
+                        
+                        cx = int(np.floor(cc.shape[0]/2))
+                        cy = int(np.floor(cc.shape[0]/2))
+                        
+                        x0 = cx-boundary_dim
+                        xf = cx+boundary_dim
+                        y0 = cy-boundary_dim
+                        yf = cy+boundary_dim
+                        
+                        if x0 >0:
+                            cc_masked[:x0,:] = 0 #left boundary
+                        if xf < cc.shape[0]:
+                            cc_masked[xf:,:] = 0 #right boundary
+                        if y0 > 0:
+                            cc_masked[:,:y0] = 0 #up boundary
+                        if yf < cc.shape[1]:
+                            cc_masked[:,yf:] = 0 #bottom boundary  
+                        cc = np.fft.fftshift(cc_masked)
                     
-                    cx = int(np.floor(cc.shape[0]/2))
-                    cy = int(np.floor(cc.shape[0]/2))
                     
-                    x0 = cx-boundary_dim
-                    xf = cx+boundary_dim
-                    y0 = cy-boundary_dim
-                    yf = cy+boundary_dim
-                    
-                    if x0 >0:
-                        cc_masked[:x0,:] = 0 #left boundary
-                    if xf < cc.shape[0]:
-                        cc_masked[xf:,:] = 0 #right boundary
-                    if y0 > 0:
-                        cc_masked[:,:y0] = 0 #up boundary
-                    if yf < cc.shape[1]:
-                        cc_masked[:,yf:] = 0 #bottom boundary  
-                    cc = np.fft.fftshift(cc_masked)
-                
-                
-                xshift, yshift = findMaxima(cc)
-                if xshift<self.nx/2:
-                        self.X_ij[i,j] = xshift
-                else:
-                        self.X_ij[i,j] = xshift-self.nx
-                if yshift<self.ny/2:
-                        self.Y_ij[i,j] = yshift
-                else:
-                        self.Y_ij[i,j] = yshift-self.ny
+                    xshift, yshift = findMaxima(cc)
+                    if xshift<self.nx/2:
+                            self.X_ij[i,j] = xshift
+                    else:
+                            self.X_ij[i,j] = xshift-self.nx
+                    if yshift<self.ny/2:
+                            self.Y_ij[i,j] = yshift
+                    else:
+                            self.Y_ij[i,j] = yshift-self.ny
+                    pbar.update(1)
 
         # Fill in remaining skew-symmetric matrix elements
         for i in range (0, self.nz-1):
@@ -352,7 +354,18 @@ class imstack(object):
         shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
         return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
 
-    def checkGaussianFit(self,i,j):
+    def getGaussianFitResult(self,i,j):
+        """
+        Gets the cutouts of cross correlation near peaks and gaussian fits used for maxima
+        identification.
+        
+        Inputs:
+            i,j      ints     Image indices.  Gaussians fit to cross correlation of images
+                               i and j.
+        
+        """
+
+
         cc = self.getSingleCrossCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
 
         all_shifts = self.get_n_cross_correlation_maxima(cc,self.num_peaks)
@@ -378,10 +391,6 @@ class imstack(object):
                 #print(popt)
 
         return (np.array(datas),np.array(fits),np.array(popts),cc,all_shifts)
-
-        #shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
-        #return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
-        #return amplitudes, positions, sigmas, thetas, offsets, success_mask
 
 
     def setCoMParams(self,num_iter=2,min_window_frac=3):
@@ -428,7 +437,7 @@ class imstack(object):
             bad_image_mask: False at specified bad images
             outlier_mask: False on datapoints determined to be outliers
         """
-        self.Rij_mask = (self.nz_mask)*(self.bad_image_mask)*(self.outlier_mask)
+        self.Rij_mask = (self.nz_mask)*(self.bad_image_mask)*(self.outlier_mask)*(self.offdiagonal_mask)
         return
 
     def set_nz(self, nz_min, nz_max):
@@ -457,6 +466,24 @@ class imstack(object):
         for image in bad_images:
             self.bad_image_mask[image,:]=False
             self.bad_image_mask[:,image]=False
+        self.update_Rij_mask()
+        return
+
+
+    def mask_off_diagonal(self,n):
+        """
+        Masks out far off diagonal pairs, with selection criteria |i-j| > n.
+        For no off diagonal mask, set n to False.
+        Inouts:
+            n       int     distance from diagonal to mask, False for no masking
+
+        """
+        self.offdiagonal_mask = np.ones((self.nz,self.nz),dtype=bool)
+        if n:
+            for it in range(self.nz):
+                for jt in range(self.nz):
+                    if abs(it-jt) > n:
+                        self.offdiagonal_mask[it,jt] = False
         self.update_Rij_mask()
         return
 
@@ -620,7 +647,7 @@ class imstack(object):
 
         good_image_indices = self.Rij_mask_c.sum(axis=1).nonzero()[0]
         self.stack_registered=np.zeros((self.nx,self.ny,len(good_image_indices)))
-        for i in range(len(good_image_indices)):
+        for i in tqdm(range(len(good_image_indices))):
             self.stack_registered[:,:,i]=generateShiftedImage(self.imstack[:,:,good_image_indices[i]],self.shifts_x[good_image_indices[i]],self.shifts_y[good_image_indices[i]])
         self.average_image = np.sum(self.stack_registered,axis=2)/float(len(good_image_indices))
         return
@@ -662,7 +689,7 @@ class imstack(object):
             display.show(self,crop=crop,returnfig=returnfig)
             return
 
-    def show_Rij(self,Xmax=False,Ymax=False, mask=True,normalization=True, returnfig=False):
+    def show_Rij(self,Xmax=False,Ymax=False, mask=True,normalization=True, returnfig=False,colorbars=True):
         """
         Display Rij matrix.
 
@@ -672,12 +699,12 @@ class imstack(object):
             mask    bool    If true, overlays mask of bad data points.
         """
         if returnfig:
-            return display.show_Rij(self,Xmax=Xmax,Ymax=Ymax,mask=mask,normalization=normalization,returnfig=returnfig)
+            return display.show_Rij(self,Xmax=Xmax,Ymax=Ymax,mask=mask,normalization=normalization,returnfig=returnfig,colorbars=colorbars)
         else:
-            display.show_Rij(self,Xmax=Xmax,Ymax=Ymax,mask=mask,normalization=normalization,returnfig=returnfig)
+            display.show_Rij(self,Xmax=Xmax,Ymax=Ymax,mask=mask,normalization=normalization,returnfig=returnfig,colorbars=colorbars)
             return
 
-    def show_Rij_c(self,Xmax=False,Ymax=False, mask=True):
+    def show_Rij_c(self,Xmax=False,Ymax=False, mask=True,colorbars=True):
         """
         Display corrected Rij matrix.
 
@@ -686,7 +713,7 @@ class imstack(object):
             Ymax    float   Scales Yij colormap between -Ymax and +Ymax
             mask    bool    If true, overlays mask of bad data points.
         """
-        display.show_Rij_c(self,Xmax=Xmax,Ymax=Ymax,mask=True)
+        display.show_Rij_c(self,Xmax=Xmax,Ymax=Ymax,mask=True,colorbars=colorbars)
         return
 
     def show_Fourier_mask(self, i=0,j=1):
@@ -698,6 +725,18 @@ class imstack(object):
             image_index     int     FFT to display
         """
         return display.show_Fourier_mask(self,i=i,j=j)
+
+    def show_Gaussian_fit(self,i=0,j=1):
+        """
+        Shows the gaussians fit to the cross correlation on the given pair of images, per
+        the parameters specified in setGaussianFitParams. 
+
+        Inputs:
+            i,j      ints     Image indices.  Gaussians fit to cross correlation of images
+                               i and j.
+
+        """
+        return display.show_Gaussian_fit(self,i=i,j=j)
 
     def show_report(self):
         """
@@ -725,6 +764,16 @@ class imstack(object):
         save.save(self,fout=fout,crop=crop)
         return
 
+    def save_registered_stack(self, fout,crop=True):
+        """
+        Saves imstack.registered_stack as bigtiff, appending to fout using tifffile
+        Inputs:
+            fout    str     path to output filename.
+                            Appends to existing file if present
+        """
+        save.save_registered_stack(self,fout=fout,crop=crop)
+        return
+
     def save_report(self,fout):
         """
         Saves a report showing the average image, its FFT, and all shifts with and without
@@ -737,7 +786,32 @@ class imstack(object):
         save.save_report(self,fout=fout)
         return
 
+    def apply_shifts_to_stack(self,new_stack):
+        """
+        Returns a new imstack object from argument new_stack, with shifts and (some) 
+        metadata copied over from current imstack. Useful for registering simultaneously
+        acquired datasets.
+
+        Inputs:
+            new_stack   ndarray of floats
+        """
+        new_imstack = imstack(new_stack)
+        new_imstack.shifts_x = self.shifts_x
+        new_imstack.shifts_y = self.shifts_y
+        new_imstack.Rij_mask_c = self.Rij_mask_c
+        new_imstack.X_ij =self.X_ij
+        new_imstack.Y_ij =self.Y_ij
+        new_imstack.Rij_mask =self.Rij_mask
+        new_imstack.correlation_type ='N/A'
+        new_imstack.find_maxima_method ='N/A'
+        new_imstack.mask_params =self.mask_params
+        new_imstack.is_copy = True
+        return new_imstack
+
+
     #################### END IMSTACK OBJECT ####################
+
+
 
 
 

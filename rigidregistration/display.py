@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
+from skimage.util import montage
 
 def show(imstack,crop=True,returnfig=False):
     """
@@ -31,7 +32,7 @@ def show(imstack,crop=True,returnfig=False):
     else:
         return
 
-def show_Rij(imstack,Xmax=False,Ymax=False, mask=True,normalization=True,returnfig=False):
+def show_Rij(imstack,Xmax=False,Ymax=False, mask=True,normalization=True,returnfig=False,colorbars=True):
     """
     Display Rij matrix.
 
@@ -40,7 +41,7 @@ def show_Rij(imstack,Xmax=False,Ymax=False, mask=True,normalization=True,returnf
         Ymax    float   Scales Yij colormap between -Ymax and +Ymax
         mask    bool    If true, overlays mask of bad data points.
     """
-
+    
     X_ij_copy=np.copy(imstack.X_ij)
     Y_ij_copy=np.copy(imstack.Y_ij)
     ismask = True
@@ -55,13 +56,13 @@ def show_Rij(imstack,Xmax=False,Ymax=False, mask=True,normalization=True,returnf
 
         fig,(ax1,ax2)=plt.subplots(1,2,figsize=(5,2.7),dpi=100)
         if Xmax:
-            ax1.matshow(X_ij_copy,cmap=r'RdBu',vmin=-Xmax,vmax=Xmax)
+            xmat = ax1.matshow(X_ij_copy,cmap=r'RdBu',vmin=-Xmax,vmax=Xmax)
         else:
-            ax1.matshow(X_ij_copy,cmap=r'RdBu')
+            xmat = ax1.matshow(X_ij_copy,cmap=r'RdBu')
         if Ymax:
-            ax2.matshow(Y_ij_copy,cmap=r'RdBu',vmin=-Ymax,vmax=Ymax)
+            ymat = ax2.matshow(Y_ij_copy,cmap=r'RdBu',vmin=-Ymax,vmax=Ymax)
         else:
-            ax2.matshow(Y_ij_copy,cmap=r'RdBu')
+            ymat = ax2.matshow(Y_ij_copy,cmap=r'RdBu')
 
         # Make transparent colormap
         cmap_mask=plt.cm.binary_r
@@ -78,14 +79,20 @@ def show_Rij(imstack,Xmax=False,Ymax=False, mask=True,normalization=True,returnf
     else:
         fig,(ax1,ax2)=plt.subplots(1,2,figsize=(5,2.7),dpi=100)
         if Xmax:
-            ax1.matshow(imstack.X_ij,cmap=r'RdBu',vmin=-Xmax,vmax=Xmax)
+            xmat = ax1.matshow(imstack.X_ij,cmap=r'RdBu',vmin=-Xmax,vmax=Xmax)
         else:
-            ax1.matshow(imstack.X_ij,cmap=r'RdBu')
+            xmat = ax1.matshow(imstack.X_ij,cmap=r'RdBu')
         if Ymax:
-            ax2.matshow(imstack.Y_ij,cmap=r'RdBu',vmin=-Ymax,vmax=Ymax)
+            ymat = ax2.matshow(imstack.Y_ij,cmap=r'RdBu',vmin=-Ymax,vmax=Ymax)
         else:
-            ax2.matshow(imstack.Y_ij,cmap=r'RdBu')
+            ymat = ax2.matshow(imstack.Y_ij,cmap=r'RdBu')
 
+    if colorbars:
+        fig.colorbar(xmat, ax=ax1,shrink=.55)
+        fig.colorbar(ymat, ax=ax2,shrink=.55)
+        
+            
+    
     ax1.grid(False)
     ax2.grid(False)
     ax1.set_title("Shift Matrix (X)",y=1.09)
@@ -98,13 +105,16 @@ def show_Rij(imstack,Xmax=False,Ymax=False, mask=True,normalization=True,returnf
     ax2.yaxis.set_ticks(np.arange(0, imstack.nz, 5))
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.03)
+
+
+
     if returnfig:
         return fig
     else:
         return
 
 
-def show_Rij_c(imstack,Xmax=False,Ymax=False, mask=True):
+def show_Rij_c(imstack,Xmax=False,Ymax=False, mask=True,colorbars=True):
     """
     Display corrected Rij matrix.
 
@@ -115,13 +125,13 @@ def show_Rij_c(imstack,Xmax=False,Ymax=False, mask=True):
     """
     fig,(ax1,ax2)=plt.subplots(1,2)
     if Xmax:
-        ax1.matshow(imstack.X_ij_c,cmap=r'RdBu',vmin=-Xmax,vmax=Xmax)
+        xmat = ax1.matshow(imstack.X_ij_c,cmap=r'RdBu',vmin=-Xmax,vmax=Xmax)
     else:
-        ax1.matshow(imstack.X_ij_c,cmap=r'RdBu')
+        xmat = ax1.matshow(imstack.X_ij_c,cmap=r'RdBu')
     if Ymax:
-        ax2.matshow(imstack.Y_ij_c,cmap=r'RdBu',vmin=-Ymax,vmax=Ymax)
+        ymat = ax2.matshow(imstack.Y_ij_c,cmap=r'RdBu',vmin=-Ymax,vmax=Ymax)
     else:
-        ax2.matshow(imstack.Y_ij_c,cmap=r'RdBu')
+        ymat = ax2.matshow(imstack.Y_ij_c,cmap=r'RdBu')
     if mask and np.sum(imstack.Rij_mask_c==False)!=0:
         # Make transparent colormap
         cmap_mask=plt.cm.binary_r
@@ -131,6 +141,10 @@ def show_Rij_c(imstack,Xmax=False,Ymax=False, mask=True):
         # Overlay mask
         ax1.matshow(imstack.Rij_mask_c,cmap=cmap_mask)
         ax2.matshow(imstack.Rij_mask_c,cmap=cmap_mask)
+    if colorbars:
+        fig.colorbar(xmat, ax=ax1,shrink=.55)
+        fig.colorbar(ymat, ax=ax2,shrink=.55)
+
     ax1.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
     ax2.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
     ax1.grid(False)
@@ -169,6 +183,36 @@ def show_Fourier_mask(imstack,i=0,j=1):
     ax3.set_title("Cross correlation")
     plt.show()
     return
+
+def show_Gaussian_fit(imstack,i=0,j=1):
+    """
+    Shows the gaussians fit to the cross correlation on the given pair of images, per
+    the parameters specified in setGaussianFitParams. 
+
+    Inputs:
+        i,j      ints     Image indices.  Gaussians fit to cross correlation of images
+                           i and j.
+
+    """
+    datas,fits,popts,cc,maxima = imstack.getGaussianFitResult(i,j)
+    posns = maxima[:,::-1]+popts[:,1:3][::1]-imstack.window_radius
+    midx = np.argmax(2*np.pi*popts[:,0]*popts[:,3]*popts[:,4]+popts[:,6]*np.pi*popts[:,3]*popts[:,4])
+
+
+    fig,ax = plt.subplots(1,3)
+    ax[0].matshow(montage(datas))
+    ax[0].axis('off')
+    ax[0].set_title('Data')
+    ax[1].matshow(montage(fits))
+    ax[1].axis('off')
+    ax[1].set_title('Fits')
+    ax[2].matshow(np.fft.fftshift(cc))
+    ax[2].plot(posns[:,0],posns[:,1],'r.')
+    ax[2].axis('off')
+    ax[2].plot(posns[midx,0],posns[midx,1],'yx')
+
+
+
 
 
 def show_report(imstack):
