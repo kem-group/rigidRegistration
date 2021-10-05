@@ -487,6 +487,21 @@ class imstack(object):
         self.update_Rij_mask()
         return
 
+    def refine_mask(self):
+        """
+        Modifies mask to improve ability to correct shift matrix. Currently, just 
+        ensures that all diagonal elements are unmasked. Should be run after all
+        other masking functions, update_Rij_mask
+
+        """
+
+        # set all diagonal elements not set as bad images to unmasked
+        # Necessary as NN masking will sometimes select diagonal
+        for it in range(self.nz):
+            if not it in self.bad_images:
+                self.Rij_mask[it,it]=1
+        return
+
     ############ Methods for outlier detection ###################
 
     def get_outliers(self, threshold, maxpaths=5):
