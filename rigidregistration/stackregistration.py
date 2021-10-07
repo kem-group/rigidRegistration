@@ -40,6 +40,7 @@ class imstack(object):
         self.nz_min, self.nz_max = 0, self.nz
 
         self.is_copy = False
+        self.bad_images = []
 
         # Define real and reciprocal space meshgrids
         rx,ry = np.meshgrid(np.arange(self.nx),np.arange(self.ny))
@@ -753,12 +754,12 @@ class imstack(object):
         """
         return display.show_Gaussian_fit(self,i=i,j=j)
 
-    def show_report(self):
+    def show_report(self,colorbars=True):
         """
         Displays a report showing the average image, its FFT, and all shifts with and without
         the mask used.
         """
-        display.show_report(self)
+        display.show_report(self,colorbars=colorbars)
         return
 
     ####################### Saving methods ######################
@@ -789,7 +790,7 @@ class imstack(object):
         save.save_registered_stack(self,fout=fout,crop=crop)
         return
 
-    def save_report(self,fout):
+    def save_report(self,fout,colorbars=True):
         """
         Saves a report showing the average image, its FFT, and all shifts with and without
         the mask used.
@@ -798,7 +799,7 @@ class imstack(object):
             fout    str     path to output filename.
                             If fout does not end in .pdf, it is appended
         """
-        save.save_report(self,fout=fout)
+        save.save_report(self,fout=fout,colorbars=colorbars)
         return
 
     def apply_shifts_to_stack(self,new_stack):

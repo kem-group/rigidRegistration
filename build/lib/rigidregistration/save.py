@@ -74,7 +74,7 @@ def save_registered_stack(imstack,fout,crop=True):
     return
 
 
-def save_report(imstack, fout):
+def save_report(imstack, fout,colorbars=True):
 
     # Set up report
     if splitext(fout)[1]=='.pdf':
@@ -105,19 +105,27 @@ def save_report(imstack, fout):
     # Make figure
     fig2,((ax21,ax22),(ax23,ax24)) = plt.subplots(2,2)
 
-    ax21.matshow(imstack.X_ij,cmap=r'RdBu')
-    ax23.matshow(imstack.X_ij,cmap=r'RdBu')
+    mat21 = ax21.matshow(imstack.X_ij,cmap=r'RdBu')
+    mat23 = ax23.matshow(imstack.X_ij,cmap=r'RdBu')
     ax21.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
     ax23.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
     if np.sum(imstack.Rij_mask==False)!=0:
         ax23.matshow(imstack.Rij_mask,cmap=cmap_mask)
 
-    ax22.matshow(imstack.Y_ij,cmap=r'RdBu')
-    ax24.matshow(imstack.Y_ij,cmap=r'RdBu')
+    mat22 = ax22.matshow(imstack.Y_ij,cmap=r'RdBu')
+    mat24 = ax24.matshow(imstack.Y_ij,cmap=r'RdBu')
     ax22.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
     ax24.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
     if np.sum(imstack.Rij_mask==False)!=0:
         ax24.matshow(imstack.Rij_mask,cmap=cmap_mask)
+
+
+    if colorbars:
+        fig2.colorbar(mat21, ax=ax21,shrink=.55)
+        fig2.colorbar(mat22, ax=ax22,shrink=.55)
+        fig2.colorbar(mat23, ax=ax23,shrink=.55)
+        fig2.colorbar(mat24, ax=ax24,shrink=.55)
+
 
     ax21.axis('off')
     ax22.axis('off')
@@ -133,11 +141,16 @@ def save_report(imstack, fout):
     # Make figure
     fig3,(ax31,ax32) = plt.subplots(1,2)
 
-    ax31.matshow(imstack.X_ij_c,cmap=r'RdBu')
+    mat31 = ax31.matshow(imstack.X_ij_c,cmap=r'RdBu')
     ax31.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
 
-    ax32.matshow(imstack.Y_ij_c,cmap=r'RdBu')
+    mat32 = ax32.matshow(imstack.Y_ij_c,cmap=r'RdBu')
     ax32.add_patch(Rectangle((imstack.nz_min-0.5, imstack.nz_min-0.5),imstack.nz_max-imstack.nz_min,imstack.nz_max-imstack.nz_min,facecolor='none',edgecolor='k',linewidth=3))
+
+    if colorbars:
+        fig3.colorbar(mat31, ax=ax31,shrink=.55)
+        fig3.colorbar(mat32, ax=ax32,shrink=.55)
+
 
     ax31.axis('off')
     ax32.axis('off')
