@@ -1,5 +1,10 @@
+.gitignore
 README.md
 setup.py
+dist/rigidregistration-0.2-py2.7.egg
+dist/rigidregistration-0.2-py3.7.egg
+dist/rigidregistration-0.2-py3.8.egg
+dist/rigidregistration-0.2.1-py3.9.egg
 rigidregistration/FFTW.py
 rigidregistration/__init__.py
 rigidregistration/display.py
@@ -11,3 +16,10 @@ rigidregistration.egg-info/SOURCES.txt
 rigidregistration.egg-info/dependency_links.txt
 rigidregistration.egg-info/not-zip-safe
 rigidregistration.egg-info/top_level.txt
+samplefiles/DetailedWalkThrough.ipynb
+samplefiles/MinimumWorkingExample.ipynb
+samplefiles/QuickWalkThrough-0.2.1.ipynb
+samplefiles/QuickWalkThrough.ipynb
+samplefiles/sample_data/CdSe_NPs.tif
+samplefiles/sample_data/Nb3Cl8_cross_section.tif
+samplefiles/sample_data/SrTiO3.tif

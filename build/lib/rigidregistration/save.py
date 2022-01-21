@@ -62,7 +62,7 @@ def save_registered_stack(imstack,fout,crop=True):
         filepath=fout
     else:
         filepath=fout+'.tif'
-    if isfile(filepath):
+    '''if isfile(filepath):
         raise IOError('File already exists') 
     with tifffile.TiffWriter(filepath, bigtiff=False, append=True) as tif:
         for img_slice in range(0,np.size(imstack.stack_registered,2)):
@@ -70,7 +70,11 @@ def save_registered_stack(imstack,fout,crop=True):
                 tif.save(np.float32(imstack.stack_registered[imstack.xmin:imstack.xmax,imstack.ymin:imstack.ymax,img_slice])) 
             else:
                 tif.save(np.float32(imstack.stack_registered[:,:,img_slice]))
-
+    '''
+    if crop:
+        tifffile.imwrite(filepath,np.float32(np.rollaxis(imstack.stack_registered[imstack.xmin:imstack.xmax,imstack.ymin:imstack.ymax,:],2,0)))
+    else:
+        tifffile.imwrite(filepath,np.float32(np.rollaxis(imstack.stack_registered,2,0)))
     return
 
 
