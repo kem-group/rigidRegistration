@@ -11,6 +11,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from math import floor, ceil
 from tqdm.auto import tqdm
+from concurrent.futures import ProcessPoolExecutor
 
 # Import local libraries
 from . import display
@@ -155,6 +156,202 @@ class imstack(object):
         self.mask_params={'masktype':"User defined"}
         self.mask_fourierspace = np.fft.fftshift(mask)
         return
+
+    # args: tuple containing (self,fft1,fft2, index1,index2,clipping_dimension,findMaxima)
+    def handleImageShift(args):
+        obj = args[0]
+        fft1 = args[1]
+        fft2 = args[2]
+        i = args[3]
+        j = args[4]
+        clippingDimension=args[5]
+        findMaxima = args[6]
+
+        '''cc = getSingleCorrelation(fft1, fft2)
+        if not clippingDimension is None:
+            cc_masked = np.fft.fftshift(cc)
+            
+            boundary_dim = np.abs(i-j)*clippingDimension
+            
+            cx = int(np.floor(cc.shape[0]/2))
+            cy = int(np.floor(cc.shape[0]/2))
+            
+            x0 = cx-boundary_dim
+            xf = cx+boundary_dim
+            y0 = cy-boundary_dim
+            yf = cy+boundary_dim
+            
+            if x0 >0:
+                cc_masked[:x0,:] = 0 #left boundary
+            if xf < cc.shape[0]:
+                cc_masked[xf:,:] = 0 #right boundary
+            if y0 > 0:
+                cc_masked[:,:y0] = 0 #up boundary
+            if yf < cc.shape[1]:
+                cc_masked[:,yf:] = 0 #bottom boundary  
+            cc = np.fft.fftshift(cc_masked)
+        
+        
+        xshift, yshift = findMaxima(cc)
+        '''
+        xshift = 1
+        yshift = 1
+
+        return xshift,yshift
+
+    def findImageShiftsParallel(self,correlationType="cc",findMaxima="pixel",verbose=False,clippingDimension=None,chunksize=1):
+        """
+        Gets all image shifts.
+        Proceeds as follows:
+            (1) If fftstack has not been calculated, calculate it.  Note that if a Fourier
+                mask has not been defined, the default bandpass filter is used.
+            (2) Get correlation between image pair (i,j).  Use selected correlation type.
+                Options listed below.
+            (3) Find maximum in correlation.  Use selected maximum finding approach.  Options
+                below.
+            (4) Repeat 2-3 for all image pairs.  Store output shifts in Rij matrices.
+
+        Inputs:
+            correlationType     str     Correlation type.  Options:
+                                        'cc' = cross correlation
+                                        'mc' = mutual corraltion
+                                        'pc' = phase correlation
+            findMaxima          str     Method to find maximum value in correlations. Options:
+                                        'pixel' = identify maximum pixel
+                                        'gf' = fit a gaussian about n maximal pixels. Helps with
+                                               unit cell jumps from sampling noise in atomic
+                                               resolution data.  Change fitting parameters by
+                                               calling self.setGaussianFitParams().
+                                        'com' = center of mass. Finds center of mass twice, once
+                                                over whole image, and again over small region
+                                                about center from first iteration.
+            verbose             bool    Depracated
+        Outputs:
+            X_ij, Y_ij    ndarrays of floats, shape (nz,nz), of calculated shifts in X and Y.
+        """
+        # Define shift matrices
+        self.X_ij, self.Y_ij = np.zeros((self.nz,self.nz)), np.zeros((self.nz,self.nz))
+
+        # If fftstack is not defined, get all FFTs
+        if not hasattr(self,'fftstack'):
+            self.getFFTs()
+
+        # Define correlation function call
+        if correlationType=="cc":
+            getSingleCorrelation = self.getSingleCrossCorrelation
+        elif correlationType=="mc":
+            getSingleCorrelation = self.getSingleMutualCorrelation
+        elif correlationType=="pc":
+            getSingleCorrelation = self.getSinglePhaseCorrelation
+        else:
+            print("'correlationType' must be 'cc', 'mc', or 'pc'.")
+            return
+        self.correlation_type=correlationType
+        self.find_maxima_method=findMaxima
+        # Define maximum finder function call
+        if findMaxima=="pixel":
+            findMaxima = self.getSingleShift_pixel
+        elif findMaxima=="gf":
+            findMaxima = self.getSingleShift_gaussianFit
+        elif findMaxima=="com":
+            findMaxima = self.getSingleShift_com
+        else:
+            print("'findMaxima' must be 'pixel', 'gf', or 'com'.")
+            return
+
+        JJ,II = np.meshgrid(np.arange(10)+1,np.arange(10)+1)
+        mask = np.triu(JJ)>0
+        JJ = JJ[mask]-1
+        II = II[mask]-1
+
+        #(self,fft1,fft2, index1,index2,clipping_dimension,findMaxima)
+        arglist = []
+        for it in range(len(JJ)):
+            thisI = II[it]
+            thisJ = JJ[it]
+            #arglist.append((0,self.fftstack[:,:,thisI],self.fftstack[:,:,thisJ],thisI,thisJ,clippingDimension,findMaxima))
+            arglist.append((0,1,1,1,1,1,1))
+        executor = ProcessPoolExecutor()
+        futures = executor.map(self.handleImageShift,arglist,chunksize=chunksize)
+        executor.shutdown()
+
+
+
+        '''
+        # Calculate all image shifts
+        for i in (range (0, self.nz-1)):
+            for j in (range(i+1, self.nz)):
+                cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+                
+                if not clippingDimension is None:
+                    cc_masked = np.fft.fftshift(cc)
+                    
+                    boundary_dim = np.abs(i-j)*clippingDimension
+                    
+                    cx = int(np.floor(cc.shape[0]/2))
+                    cy = int(np.floor(cc.shape[0]/2))
+                    
+                    x0 = cx-boundary_dim
+                    xf = cx+boundary_dim
+                    y0 = cy-boundary_dim
+                    yf = cy+boundary_dim
+                    
+                    if x0 >0:
+                        cc_masked[:x0,:] = 0 #left boundary
+                    if xf < cc.shape[0]:
+                        cc_masked[xf:,:] = 0 #right boundary
+                    if y0 > 0:
+                        cc_masked[:,:y0] = 0 #up boundary
+                    if yf < cc.shape[1]:
+                        cc_masked[:,yf:] = 0 #bottom boundary  
+                    cc = np.fft.fftshift(cc_masked)
+                
+                
+                xshift, yshift = findMaxima(cc)
+                if xshift<self.nx/2:
+                        self.X_ij[i,j] = xshift
+                else:
+                        self.X_ij[i,j] = xshift-self.nx
+                if yshift<self.ny/2:
+                        self.Y_ij[i,j] = yshift
+                else:
+                        self.Y_ij[i,j] = yshift-self.ny
+        '''
+        ''''
+        # Fill in remaining skew-symmetric matrix elements
+        for i in range (0, self.nz-1):
+            for j in range(i+1, self.nz):
+                self.X_ij[j,i] = -self.X_ij[i,j]
+                self.Y_ij[j,i] = -self.Y_ij[i,j]
+        '''
+        resarr = np.zeros((len(II),2))
+        for it,fut in enumerate(futures):
+            xs = fut[0]
+            ys = fut[1]
+
+            if xs<self.nx/2:
+                    xs = xs
+            else:
+                    xs = xs-self.nx
+            if yshift<self.ny/2:
+                    ys = ys
+            else:
+                    ys = ys-self.ny
+
+
+            resarr[it,:] = (xs,ys)
+
+        #resarr = np.array(futures)
+        self.X_ij[mask] = resarr[:,0]
+        self.Y_ij[mask] = resarr[:,1]
+        # Fill in remaining skew-symmetric matrix elements
+        for i in range (0, self.nz-1):
+            for j in range(i+1, self.nz):
+                self.X_ij[j,i] = -self.X_ij[i,j]
+                self.Y_ij[j,i] = -self.Y_ij[i,j]
+
+        return self.X_ij, self.Y_ij        
+
 
     def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=False, clippingDimension=None):
         """
