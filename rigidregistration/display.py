@@ -172,6 +172,7 @@ def show_Fourier_mask(imstack,i=0,j=1):
     ax2.matshow(np.log(np.abs(np.fft.fftshift(imstack.fftstack[:,:,i]*np.where(imstack.mask_fourierspace>0.0001,imstack.mask_fourierspace,0.0001)))), cmap='gray',
                 vmin=1*np.average(np.log(np.abs(imstack.fftstack[:,:,i]))), vmax=1.8*np.average(np.log(np.abs(imstack.fftstack[:,:,i]))))
     ax3.matshow(np.abs(np.fft.fftshift(np.fft.ifft2(imstack.mask_fourierspace*imstack.fftstack[:,:,i]*imstack.fftstack[:,:,j]))),cmap='viridis')
+    # *** should be np.conj of imstack.fftstack[:,:,j] (?)
     ax1.axis('off')
     ax2.axis('off')
     ax3.axis('off')
@@ -184,7 +185,7 @@ def show_Fourier_mask(imstack,i=0,j=1):
     plt.show()
     return
 
-def show_Gaussian_fit(imstack,i=0,j=1):
+def show_Gaussian_fit(imstack,i=0,j=1,dualMask = False):
     """
     Shows the gaussians fit to the cross correlation on the given pair of images, per
     the parameters specified in setGaussianFitParams. 
@@ -194,7 +195,7 @@ def show_Gaussian_fit(imstack,i=0,j=1):
                            i and j.
 
     """
-    datas,fits,popts,cc,maxima = imstack.getGaussianFitResult(i,j)
+    datas,fits,popts,cc,maxima = imstack.getGaussianFitResult(i,j,dualMask=dualMask)
     posns = maxima[:,::-1]+popts[:,1:3][::1]-imstack.window_radius
     midx = np.argmax(2*np.pi*popts[:,0]*popts[:,3]*popts[:,4]+popts[:,6]*np.pi*popts[:,3]*popts[:,4])
 
