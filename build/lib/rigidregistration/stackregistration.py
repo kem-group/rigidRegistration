@@ -156,7 +156,22 @@ class imstack(object):
         self.mask_fourierspace = np.fft.fftshift(mask)
         return
 
-    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=False, clippingDimension=None):
+    def assignDualMask(self,power=1):
+        """
+        Assigns current fourier space mask as the dual mask, allowing a second mask to be defined.
+        dual mask will be raised to power
+        e.g.
+        > s.makeFourierMask(mask='hann', n=8) # make very low pass mask to use as dual mask
+        > s.assignDualMask() # assign current mask as dual
+        > s.makeFourierMask(mask='hann', n=4) # make higher cutoff low pass mask to use as regular fourier mask
+        # ends with n=4 mask assigned to mask_fourierspace, and n=8 mask assigned to mask_fourierspace_dual
+        """
+        self.mask_fourierspace_dual = self.mask_fourierspace
+        self.mask_fourierspace_dual_power = power
+
+
+
+    def findImageShifts(self, correlationType="cc", findMaxima="pixel", verbose=False, clippingDimension=None, dualMask = False):
         """
         Gets all image shifts.
         Proceeds as follows:
@@ -220,7 +235,11 @@ class imstack(object):
         with tqdm(total=int(self.nz*(self.nz-1)/2)) as pbar:
             for i in (range (0, self.nz-1)):
                 for j in (range(i+1, self.nz)):
-                    cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+                    if dualMask:
+                        cc = self.getSingleCrossCorrelation_dual(self.fftstack[:,:,i], self.fftstack[:,:,j])
+                    else:
+                        cc = getSingleCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+
                     
                     if not clippingDimension is None:
                         cc_masked = np.fft.fftshift(cc)
@@ -265,6 +284,9 @@ class imstack(object):
 
         return self.X_ij, self.Y_ij
 
+
+
+
     ########### Methods for correlating image pairs #############
 
     def getSingleCrossCorrelation(self, fft1, fft2):
@@ -308,6 +330,17 @@ class imstack(object):
             self.makeFourierMask()
             phase_correlation = np.abs(self.fftw.ifft(self.mask_fourierspace * fft2 * np.conj(fft1) / (np.abs(fft2)**2) ))
         return phase_correlation
+
+
+    def getSingleCrossCorrelation_dual(self,fft1,fft2):
+        """
+        Cross correlates two images from previously calculated ffts.
+        *** applying self.mask_fourierspace_dual rather than self.mask_fourierspace
+        """
+        dual_correlation = np.abs(self.fftw.ifft(self.mask_fourierspace_dual * fft2 * np.conj(fft1)))
+        cross_correlation = np.abs(self.fftw.ifft(self.mask_fourierspace * fft2 * np.conj(fft1)))
+        return cross_correlation * dual_correlation**self.mask_fourierspace_dual_power
+
 
     ########### Methods for getting shifts from correlation maxima ########## 
 
@@ -355,7 +388,7 @@ class imstack(object):
         shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
         return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
 
-    def getGaussianFitResult(self,i,j):
+    def getGaussianFitResult(self,i,j,dualMask = False):
         """
         Gets the cutouts of cross correlation near peaks and gaussian fits used for maxima
         identification.
@@ -366,8 +399,10 @@ class imstack(object):
         
         """
 
-
-        cc = self.getSingleCrossCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
+        if dualMask:
+            cc = self.getSingleCrossCorrelation_dual(self.fftstack[:,:,i], self.fftstack[:,:,j])
+        else:
+            cc = self.getSingleCrossCorrelation(self.fftstack[:,:,i], self.fftstack[:,:,j])
 
         all_shifts = self.get_n_cross_correlation_maxima(cc,self.num_peaks)
 
@@ -742,7 +777,7 @@ class imstack(object):
         """
         return display.show_Fourier_mask(self,i=i,j=j)
 
-    def show_Gaussian_fit(self,i=0,j=1):
+    def show_Gaussian_fit(self,i=0,j=1,dualMask = False,cmap='viridis',color='yellow'):
         """
         Shows the gaussians fit to the cross correlation on the given pair of images, per
         the parameters specified in setGaussianFitParams. 
@@ -752,7 +787,7 @@ class imstack(object):
                                i and j.
 
         """
-        return display.show_Gaussian_fit(self,i=i,j=j)
+        return display.show_Gaussian_fit(self,i=i,j=j,dualMask = dualMask,cmap=cmap,color=color)
 
     def show_report(self,colorbars=True):
         """

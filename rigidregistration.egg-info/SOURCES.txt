@@ -4,6 +4,7 @@ setup.py
 dist/rigidregistration-0.2-py2.7.egg
 dist/rigidregistration-0.2-py3.7.egg
 dist/rigidregistration-0.2-py3.8.egg
+dist/rigidregistration-0.2.1-py3.7.egg
 dist/rigidregistration-0.2.1-py3.9.egg
 rigidregistration/FFTW.py
 rigidregistration/__init__.py

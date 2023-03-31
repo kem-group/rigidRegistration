@@ -777,7 +777,7 @@ class imstack(object):
         """
         return display.show_Fourier_mask(self,i=i,j=j)
 
-    def show_Gaussian_fit(self,i=0,j=1,dualMask = False):
+    def show_Gaussian_fit(self,i=0,j=1,dualMask = False,cmap='viridis',color='yellow'):
         """
         Shows the gaussians fit to the cross correlation on the given pair of images, per
         the parameters specified in setGaussianFitParams. 
@@ -787,7 +787,7 @@ class imstack(object):
                                i and j.
 
         """
-        return display.show_Gaussian_fit(self,i=i,j=j,dualMask = dualMask)
+        return display.show_Gaussian_fit(self,i=i,j=j,dualMask = dualMask,cmap=cmap,color=color)
 
     def show_report(self,colorbars=True):
         """
