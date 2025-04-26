@@ -44,9 +44,9 @@ def save(imstack, fout, crop=True):
     metadata['is_copy'] = imstack.is_copy
     metadata = json.dumps([metadata])
     if crop:
-        tifffile.imsave(filepath,imstack.cropped_image.astype('float32'),description=metadata)
+        tifffile.imwrite(filepath,imstack.cropped_image.astype('float32'),description=metadata)
     else:
-        tifffile.imsave(filepath,imstack.average_image.astype('float32'),description=metadata)
+        tifffile.imwrite(filepath,imstack.average_image.astype('float32'),description=metadata)
     return
 
 
