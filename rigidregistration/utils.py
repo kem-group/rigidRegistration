@@ -213,7 +213,21 @@ def getpaths(i,j,maxpaths,nz):
 
 
 
+def score_transitivity(tX_ij,tY_ij,maxpaths=5):
+    transitivity_scores=np.zeros_like(tX_ij)
+    for i in range(len(tX_ij)-1):
+        for j in range(i+1,len(tX_ij)):
+            paths = getpaths(i,j,maxpaths,len(tX_ij))
+            for p in paths:
+                pdx = np.array([tX_ij[ip] for ip in p])
+                pdy = np.array([tY_ij[ip] for ip in p])
+                transitivity_scores[i,j] +=np.sqrt((pdx.sum()-tX_ij[j,i])**2+(pdy.sum()-tY_ij[j,i])**2)
+    transitivity_scores /= maxpaths
+    for i in range(len(tX_ij)-1):
+        for j in range(i+1,len(tY_ij)):
+            transitivity_scores[j,i] = transitivity_scores[i,j]
 
+    return transitivity_scores
 
 
 

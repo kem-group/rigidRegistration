@@ -16,7 +16,7 @@ from tqdm.auto import tqdm
 from . import display
 from . import save
 from . import FFTW
-from .utils import generateShiftedImage, gauss2d, fit_gaussian, on_edge, get_cutout, fit_peaks, getpaths, allpaths
+from .utils import generateShiftedImage, gauss2d, fit_gaussian, on_edge, get_cutout, fit_peaks, getpaths, allpaths, score_transitivity
 
 
 
@@ -227,6 +227,11 @@ class imstack(object):
             findMaxima = self.getSingleShift_gaussianFit
         elif findMaxima=="com":
             findMaxima = self.getSingleShift_com
+        elif findMaxima=="ngf":
+            findMaxima = self.getNShifts_gaussianFit
+            # Define shift matrices with n possible shifts at each element
+            self.nX_ij, self.nY_ij = np.zeros((self.nz,self.nz,self.num_peaks)), np.zeros((self.nz,self.nz,self.num_peaks))
+            self.nshifts = np.zeros((self.nz,self.nz),dtype=int)
         else:
             print("'findMaxima' must be 'pixel', 'gf', or 'com'.")
             return
@@ -265,7 +270,22 @@ class imstack(object):
                         cc = np.fft.fftshift(cc_masked)
                     
                     
-                    xshift, yshift = findMaxima(cc)
+                    if findMaxima==self.getNShifts_gaussianFit:
+                        xshift, yshift,nxshifts,nyshifts, nshifts = findMaxima(cc)
+                        self.nshifts[i,j] = nshifts
+                        for nt in range(self.num_peaks):
+                            if nxshifts[nt]<self.nx/2:
+                                self.nX_ij[i,j,nt] = nxshifts[nt]
+                            else:
+                                self.nX_ij[i,j,nt] = nxshifts[nt]-self.nx
+                            if nyshifts[nt]<self.ny/2:
+                                self.nY_ij[i,j,nt] = nyshifts[nt]
+                            else:
+                                self.nY_ij[i,j,nt] = nyshifts[nt]-self.ny
+                    else:
+                        xshift, yshift = findMaxima(cc)
+
+
                     if xshift<self.nx/2:
                             self.X_ij[i,j] = xshift
                     else:
@@ -281,6 +301,14 @@ class imstack(object):
             for j in range(i+1, self.nz):
                 self.X_ij[j,i] = -self.X_ij[i,j]
                 self.Y_ij[j,i] = -self.Y_ij[i,j]
+
+        if findMaxima==self.getNShifts_gaussianFit:
+            for i in range (0, self.nz-1):
+                for j in range(i+1, self.nz):
+                    for nt in range(self.num_peaks):
+                        self.nX_ij[j,i,nt] = -self.nX_ij[i,j,nt]
+                        self.nY_ij[j,i,nt] = -self.nY_ij[i,j,nt]
+            return self.X_ij, self.Y_ij, self.nX_ij, self.nY_ij, self.nshifts
 
         return self.X_ij, self.Y_ij
 
@@ -387,6 +415,46 @@ class imstack(object):
         #for integrated intensity, switch to shift_x, shift_y = positions[np.argmax(2*np.pi*amplitudes*sigmas[:,0]*sigmas[:,1]+offsets*np.pi**sigmas[:,0]*sigmas[:,1])]
         shift_x, shift_y = positions[np.argmax(offsets+amplitudes),:]
         return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
+
+    def getNShifts_gaussianFit(self,cc):
+        all_shifts = self.get_n_cross_correlation_maxima(cc,self.num_peaks)
+
+        data = np.fft.fftshift(cc)
+        est_positions = all_shifts
+        est_sigmas = np.ones_like(all_shifts)*self.sigma_guess
+        est_params=[est_positions,est_sigmas]
+
+        amplitudes, positions, sigmas, thetas, offsets, success_mask = fit_peaks(data,est_params,self.window_radius,print_mod=1, verbose=False)
+        shift_x, shift_y=positions[np.argmax(offsets+amplitudes),:]
+        shift_x = shift_x-np.shape(cc)[0]/2.0
+        shift_y = shift_y-np.shape(cc)[1]/2.0
+        #return shift_x-np.shape(cc)[0]/2.0, shift_y-np.shape(cc)[1]/2.0
+
+        #get indices to sort by cc peak heights (might as well...)
+        # -> last layer of nXij, nYij should be exactly the same as normal gf returns
+        sortInds = np.argsort(offsets+amplitudes)
+        # -> 0th layer of nXij, nYij should be exactly the same as normal gf returns
+        sortInds = np.flip(sortInds)
+        nshift_x = positions[sortInds,0]
+        nshift_y = positions[sortInds,1]
+        nshift_x = nshift_x-np.shape(cc)[0]/2.0
+        nshift_y = nshift_y-np.shape(cc)[1]/2.0
+        num_shifts =  len(offsets)
+
+        #max_amp = offsets[sortInds[0]]+amplitudes[sortInds[0]]
+        '''
+        for it,ind in enumerate(sortInds):
+            if not it==0:
+                prev_ind = 0#sortInds[it-1]
+                prev_amp = offsets[prev_ind]+amplitudes[prev_ind]
+                curr_amp = offsets[ind]+amplitudes[ind]
+                if curr_amp > prev_amp * self.gaussian_threshold:
+                    num_shifts = it
+                else:
+                    break
+        '''
+        return shift_x,shift_y,nshift_x,nshift_y,num_shifts
+
 
     def getGaussianFitResult(self,i,j,dualMask = False):
         """
@@ -552,18 +620,7 @@ class imstack(object):
             maxpaths    int     The number of transitivity relationships connecting two images
                                 which are used to evaluate if a single image shift is correct
         """
-        transitivity_scores=np.zeros_like(self.X_ij)
-        for i in range(len(self.X_ij)-1):
-            for j in range(i+1,len(self.X_ij)):
-                paths = getpaths(i,j,maxpaths,self.nz)
-                for p in paths:
-                    pdx = np.array([self.X_ij[ip] for ip in p])
-                    pdy = np.array([self.Y_ij[ip] for ip in p])
-                    transitivity_scores[i,j] += np.sqrt((pdx.sum()-self.X_ij[j,i])**2+(pdy.sum()-self.Y_ij[j,i])**2)
-        transitivity_scores /= maxpaths
-        for i in range(len(self.X_ij)-1):
-            for j in range(i+1,len(self.Y_ij)):
-                transitivity_scores[j,i] = transitivity_scores[i,j]
+        transitivity_scores=score_transitivity(self.X_ij,self.Y_ij,maxpaths=maxpaths)
         self.outlier_mask = transitivity_scores<threshold
         self.update_Rij_mask()
         return
