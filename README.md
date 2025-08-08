@@ -22,7 +22,7 @@ For more detailed discussion, please see the publication associated with this pa
 The code can be acquired by cloning this repository to your computer, using the green "Clone or download" button, or by typing into the command line
 
 ```
-git clone https://github.com/bsavitzky/rigidRegistration.git
+git clone https://github.com/kem-group/rigidRegistration.git
 ```
 
 Next, install the code by running the setup.py script. Navigate to the rigidregistration directory then type into the command line
